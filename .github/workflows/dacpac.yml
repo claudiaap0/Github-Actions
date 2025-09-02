@@ -34,20 +34,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 1) Setup .NET și build DACPAC cu MSBuild.Sdk.SqlProj
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
       - name: Restore & Build DACPAC
-        working-directory: db
         run: |
           dotnet restore
           dotnet build -c Release
           ls -lah bin/Release/*.dacpac
 
-      # 2) Instalează sqlpackage + sqlcmd
       - name: Install sqlpackage & sqlcmd
         run: |
           set -euxo pipefail
@@ -64,7 +61,6 @@ jobs:
           echo "/opt/mssql-tools18/bin" >> "$GITHUB_PATH"
           /opt/sqlpackage/sqlpackage /? | head -n 3
 
-      # 3) Așteaptă SQL Server
       - name: Wait for SQL Server (up to ~5 min)
         env:
           SA_PASSWORD: ${{ secrets[github.event.inputs.sa_password_secret] }}
@@ -76,7 +72,6 @@ jobs:
           done
           /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P "$SA_PASSWORD" -C -l 2 -Q "SELECT @@VERSION;"
 
-      # 4) Publică DACPAC
       - name: Publish DACPAC
         env:
           SA_PASSWORD: ${{ secrets[github.event.inputs.sa_password_secret] }}
@@ -89,7 +84,6 @@ jobs:
             /p:CreateNewDatabase=true \
             /p:BlockOnPossibleDataLoss=false
 
-      # 5) Smoke test – verifică tabela Books
       - name: Smoke test
         env:
           SA_PASSWORD: ${{ secrets[github.event.inputs.sa_password_secret] }}
@@ -97,7 +91,6 @@ jobs:
           /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P "$SA_PASSWORD" -C -Q "SELECT name FROM sys.tables;"
           /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P "$SA_PASSWORD" -C -Q "SELECT TOP 1 * FROM sys.objects;"
 
-      # 6) Debug logs (întotdeauna la final)
       - name: Dump mssql container logs
         if: always()
         run: |
