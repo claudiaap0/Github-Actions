@@ -88,8 +88,7 @@ jobs:
         env:
           SA_PASSWORD: ${{ secrets[github.event.inputs.sa_password_secret] }}
         run: |
-          /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P "$SA_PASSWORD" -C -Q "SELECT name FROM sys.tables;"
-          /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P "$SA_PASSWORD" -C -Q "SELECT TOP 1 * FROM sys.objects;"
+          /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P "$SA_PASSWORD" -C -d ${{ github.event.inputs.target_db }} -Q "SELECT name FROM sys.tables;"
 
       - name: Dump mssql container logs
         if: always()
