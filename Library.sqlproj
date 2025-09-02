@@ -6,8 +6,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="Scripts\PreDeployment.sql" Pack="true" PackagePath="Pre-Deployment.sql" />
-    <None Include="Scripts\PostDeployment.sql" Pack="true" PackagePath="Post-Deployment.sql" />
+    <PostDeploy Include="Scripts\PostDeployment.sql" />
+    <PreDeploy Include="Scripts\PreDeployment.sql" />
   </ItemGroup>
 
   <ItemGroup>
