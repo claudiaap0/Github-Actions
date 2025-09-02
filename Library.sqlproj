@@ -1,0 +1,20 @@
+<Project Sdk="MSBuild.Sdk.SqlProj/3.0.0">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <!-- versiunea țintă a SQL Server pentru model (poți folosi Sql160 pentru 2022) -->
+    <SqlServerVersion>Sql160</SqlServerVersion>
+    <!-- numele fișierului dacpac rezultat -->
+    <DacPacName>Library</DacPacName>
+  </PropertyGroup>
+
+  <!-- includem scripturile de pre/post-deployment în pachet -->
+  <ItemGroup>
+    <None Include="Scripts\PreDeployment.sql" Pack="true" PackagePath="Pre-Deployment.sql" />
+    <None Include="Scripts\PostDeployment.sql" Pack="true" PackagePath="Post-Deployment.sql" />
+  </ItemGroup>
+
+  <!-- toate fișierele .sql cu obiecte de schemă -->
+  <ItemGroup>
+    <Build Include="Schema\**\*.sql" />
+  </ItemGroup>
+</Project>

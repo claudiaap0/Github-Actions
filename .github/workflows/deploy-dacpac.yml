@@ -6,11 +6,11 @@ on:
       dacpac_path:
         description: 'Path to the .dacpac (relative to repo root)'
         required: true
-        default: 'db/app.dacpac'
+        default: 'library.dacpac'
       target_db:
         description: 'Target database name'
         required: true
-        default: 'AppDb'
+        default: 'db'
 
 concurrency:
   group: dacpac-${{ github.ref }}

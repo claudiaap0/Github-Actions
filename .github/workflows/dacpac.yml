@@ -1,0 +1,104 @@
+name: Build & Deploy DACPAC (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_db:
+        description: 'Target database name'
+        required: true
+        default: 'AppDb'
+      sa_password_secret:
+        description: 'Name of GH secret holding SA password'
+        required: true
+        default: 'SQL_SA_PASSWORD'
+
+concurrency:
+  group: dacpac-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          SA_PASSWORD: ${{ secrets[github.event.inputs.sa_password_secret] }}
+          MSSQL_PID: "Developer"
+        ports:
+          - 1433:1433
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 1) Setup .NET și build DACPAC cu MSBuild.Sdk.SqlProj
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore & Build DACPAC
+        working-directory: db
+        run: |
+          dotnet restore
+          dotnet build -c Release
+          ls -lah bin/Release/*.dacpac
+
+      # 2) Instalează sqlpackage + sqlcmd
+      - name: Install sqlpackage & sqlcmd
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y unzip libunwind8 libicu-dev
+          curl -L -o /tmp/sqlpackage.zip https://aka.ms/sqlpackage-linux
+          sudo rm -rf /opt/sqlpackage
+          sudo mkdir -p /opt/sqlpackage
+          sudo unzip -o /tmp/sqlpackage.zip -d /opt/sqlpackage
+          sudo chmod -R a+rX /opt/sqlpackage
+          sudo chmod +x /opt/sqlpackage/sqlpackage
+          echo "/opt/sqlpackage" >> "$GITHUB_PATH"
+          sudo ACCEPT_EULA=Y apt-get install -y mssql-tools18
+          echo "/opt/mssql-tools18/bin" >> "$GITHUB_PATH"
+          /opt/sqlpackage/sqlpackage /? | head -n 3
+
+      # 3) Așteaptă SQL Server
+      - name: Wait for SQL Server (up to ~5 min)
+        env:
+          SA_PASSWORD: ${{ secrets[github.event.inputs.sa_password_secret] }}
+        run: |
+          for i in {1..60}; do
+            /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P "$SA_PASSWORD" -C -l 2 -Q "SELECT 1" && break
+            echo "SQL not ready yet... ($i)"
+            sleep 5
+          done
+          /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P "$SA_PASSWORD" -C -l 2 -Q "SELECT @@VERSION;"
+
+      # 4) Publică DACPAC
+      - name: Publish DACPAC
+        env:
+          SA_PASSWORD: ${{ secrets[github.event.inputs.sa_password_secret] }}
+        run: |
+          DACPAC=$(ls db/bin/Release/*.dacpac | head -n1)
+          echo "Publishing $DACPAC"
+          /opt/sqlpackage/sqlpackage /Action:Publish \
+            /SourceFile:"$DACPAC" \
+            /TargetConnectionString:"Server=localhost,1433;User ID=sa;Password=$SA_PASSWORD;TrustServerCertificate=True;Database=${{ github.event.inputs.target_db }};" \
+            /p:CreateNewDatabase=true \
+            /p:BlockOnPossibleDataLoss=false
+
+      # 5) Smoke test – verifică tabela Books
+      - name: Smoke test
+        env:
+          SA_PASSWORD: ${{ secrets[github.event.inputs.sa_password_secret] }}
+        run: |
+          /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P "$SA_PASSWORD" -C -Q "SELECT name FROM sys.tables;"
+          /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P "$SA_PASSWORD" -C -Q "SELECT TOP 1 * FROM sys.objects;"
+
+      # 6) Debug logs (întotdeauna la final)
+      - name: Dump mssql container logs
+        if: always()
+        run: |
+          docker logs ${{ job.services.mssql.id }} | tail -n 500 || true
