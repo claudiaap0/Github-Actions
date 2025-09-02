@@ -1,4 +1,4 @@
-name: Build & Deploy DACPAC (manual)
+name: Build & Deploy DACPAC (inside GH container)
 
 on:
   workflow_dispatch:
