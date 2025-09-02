@@ -4,6 +4,7 @@ on:
   push:
     branches: [ main ]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   build-and-test:
@@ -13,7 +14,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # exemplu generic: rulezi scriptul tău
+      # rulezi scriptul tau
       - name: Set up environment
         run: |
           echo "Nothing to set up yet"
@@ -21,4 +22,4 @@ jobs:
       - name: Run tests
         run: |
           echo "Run your tests here"
-          # de ex: ./run_tests.sh
+          # ex: ./run_tests.sh
