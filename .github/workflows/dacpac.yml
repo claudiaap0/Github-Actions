@@ -43,7 +43,7 @@ jobs:
         run: |
           dotnet restore
           dotnet build -c Release
-          ls -lah bin/Release/*.dacpac
+          ls -lah bin/Release/net8.0/*.dacpac
 
       - name: Install sqlpackage & sqlcmd
         run: |
