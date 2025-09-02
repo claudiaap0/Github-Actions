@@ -1,4 +1,4 @@
 INSERT INTO dbo.Books (Title, Author)
 VALUES 
-    ('Predator', 'Runyx'),
-    ('Reaper', 'Runyx');
+    ('Predator', 'Runyx', 2025),
+    ('Reaper', 'Runyx', 2025);
