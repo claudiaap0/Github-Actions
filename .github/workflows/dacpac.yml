@@ -76,7 +76,7 @@ jobs:
         env:
           SA_PASSWORD: ${{ secrets[github.event.inputs.sa_password_secret] }}
         run: |
-          DACPAC=$(ls db/bin/Release/*.dacpac | head -n1)
+          DACPAC=$(ls bin/Release/net8.0/*.dacpac | head -n1)
           echo "Publishing $DACPAC"
           /opt/sqlpackage/sqlpackage /Action:Publish \
             /SourceFile:"$DACPAC" \
