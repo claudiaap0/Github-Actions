@@ -1,0 +1,63 @@
+name: Deploy DACPAC (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      dacpac_path:
+        description: 'Path to the .dacpac (relative to repo root)'
+        required: true
+        default: 'db/app.dacpac'
+      target_db:
+        description: 'Target database name'
+        required: true
+        default: 'AppDb'
+
+concurrency:
+  group: dacpac-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          SA_PASSWORD: ${{ secrets.SQL_SA_PASSWORD }}
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P $SA_PASSWORD -Q 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure .dacpac exists
+        run: |
+          test -f "${{ github.event.inputs.dacpac_path }}" || {
+            echo "File not found: ${{ github.event.inputs.dacpac_path }}"; exit 1; }
+          ls -lah "${{ github.event.inputs.dacpac_path }}"
+
+      - name: Install sqlpackage (Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip libunwind8
+          curl -L -o sqlpackage.zip https://aka.ms/sqlpackage-linux
+          sudo mkdir -p /opt/sqlpackage
+          sudo unzip -o sqlpackage.zip -d /opt/sqlpackage
+          sudo ln -sf /opt/sqlpackage/sqlpackage /usr/local/bin/sqlpackage
+          sqlpackage /? | head -n 3
+
+      - name: Publish DACPAC to local SQL Server container
+        run: |
+          sqlpackage /Action:Publish \
+            /SourceFile:"${{ github.event.inputs.dacpac_path }}" \
+            /TargetConnectionString:"Server=localhost,1433;User ID=sa;Password=${{ secrets.SQL_SA_PASSWORD }};TrustServerCertificate=True;" \
+            /TargetDatabaseName:"${{ github.event.inputs.target_db }}" \
+            /p:CreateNewDatabase=true \
+            /p:BlockOnPossibleDataLoss=false
