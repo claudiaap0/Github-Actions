@@ -1,4 +1,4 @@
-<Project Sdk="MSBuild.Sdk.SqlProj/3.2.0">
+<Project Sdk="MSBuild.Sdk.SqlProj/3.0.0">
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <!-- versiunea țintă a SQL Server pentru model (poți folosi Sql160 pentru 2022) -->
