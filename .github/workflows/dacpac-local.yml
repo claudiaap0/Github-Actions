@@ -1,0 +1,74 @@
+name: Build & Deploy DACPAC (local)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_db:
+        description: 'Target database name'
+        required: true
+        default: 'AppDb'
+      sa_password_secret:
+        description: 'Name of github secret holding SA password'
+        required: true
+        default: 'SQL_SA_PASSWORD'
+
+concurrency:
+  group: dacpac-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout repo
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Setup .NET 8
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # 3. Build DACPAC
+      - name: Restore & Build DACPAC
+        run: |
+          dotnet restore
+          dotnet build -c Release
+          ls -lah bin/Release/net8.0/*.dacpac
+
+      # 4. Install sqlpackage
+      - name: Install sqlpackage
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip libunwind8 libicu-dev
+          curl -L -o /tmp/sqlpackage.zip https://aka.ms/sqlpackage-linux
+          sudo mkdir -p /opt/sqlpackage
+          sudo unzip -o /tmp/sqlpackage.zip -d /opt/sqlpackage
+          sudo chmod +x /opt/sqlpackage/sqlpackage
+          echo "/opt/sqlpackage" >> "$GITHUB_PATH"
+
+      # 5. Publish DACPAC to local SQL Server
+      - name: Publish DACPAC to local SQL Server
+        env:
+          SA_PASSWORD: ${{ secrets[github.event.inputs.sa_password_secret] }}
+        run: |
+          DACPAC=$(ls bin/Release/net8.0/*.dacpac | head -n1)
+          echo "Publishing $DACPAC"
+          /opt/sqlpackage/sqlpackage /Action:Publish \
+            /SourceFile:"$DACPAC" \
+            /TargetConnectionString:"Server=localhost,1433;User ID=sa;Password=$SA_PASSWORD;TrustServerCertificate=True;Database=${{ github.event.inputs.target_db }};" \
+            /p:CreateNewDatabase=false \
+            /p:BlockOnPossibleDataLoss=false
+
+      # 6. Smoke test
+      - name: Smoke test
+        env:
+          SA_PASSWORD: ${{ secrets[github.event.inputs.sa_password_secret] }}
+        run: |
+          /opt/sqlpackage/sqlpackage /Action:Script \
+            /SourceFile:"$(ls bin/Release/net8.0/*.dacpac | head -n1)" \
+            /TargetConnectionString:"Server=localhost,1433;User ID=sa;Password=$SA_PASSWORD;TrustServerCertificate=True;Database=${{ github.event.inputs.target_db }};"
+          sqlcmd -S localhost,1433 -U sa -P "$SA_PASSWORD" -d ${{ github.event.inputs.target_db }} -C -Q "SELECT name FROM sys.tables;"
+          sqlcmd -S localhost,1433 -U sa -P "$SA_PASSWORD" -d ${{ github.event.inputs.target_db }} -C -Q "SELECT * FROM dbo.Books;"
